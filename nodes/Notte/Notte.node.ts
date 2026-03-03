@@ -360,7 +360,7 @@ async function executeFunction(
 	const runResponse = (await notteApiRequest.call(
 		this,
 		'POST',
-		`/functions/${functionId}/runs/create`,
+		`/functions/${functionId}/runs/start`,
 		runBody,
 	)) as IDataObject;
 
