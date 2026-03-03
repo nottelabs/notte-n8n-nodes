@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-notte",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "n8n community node for Notte - AI browser automation, web scraping, and workflow execution",
 	"license": "MIT",
 	"homepage": "https://notte.cc",
