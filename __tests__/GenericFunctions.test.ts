@@ -1,4 +1,9 @@
-import { notteApiRequest, notteApiRequestWithPolling } from '../nodes/Notte/GenericFunctions';
+/* eslint-disable @n8n/community-nodes/no-restricted-globals */
+import {
+	notteApiRequest,
+	notteApiRequestWithPolling,
+	notteApiRequestWithRedirect,
+} from '../nodes/Notte/GenericFunctions';
 import { createMockExecuteFunctions } from './helpers';
 
 // Mock n8n-workflow's sleep to avoid real delays in tests
@@ -104,6 +109,94 @@ describe('notteApiRequest', () => {
 				url: 'https://api.notte.cc/health',
 			}),
 		);
+	});
+
+	it('merges extraHeaders into request headers', async () => {
+		const { context, mockHttpRequest } = createMockExecuteFunctions();
+		mockHttpRequest.mockResolvedValue({});
+
+		await notteApiRequest.call(context as never, 'POST', '/test', {}, undefined, {
+			'x-notte-api-key': 'extra-key',
+		});
+
+		expect(mockHttpRequest).toHaveBeenCalledWith(
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					'x-notte-api-key': 'extra-key',
+					Authorization: 'Bearer test-api-key-123',
+				}),
+			}),
+		);
+	});
+});
+
+describe('notteApiRequestWithRedirect', () => {
+	let mockFetch: jest.SpyInstance;
+
+	afterEach(() => {
+		if (mockFetch) {
+			mockFetch.mockRestore();
+		}
+	});
+
+	it('makes request and returns JSON on success', async () => {
+		const { context } = createMockExecuteFunctions();
+
+		mockFetch = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: async () => ({ result: 'ok' }),
+			headers: new Headers(),
+		} as Response);
+
+		const result = await notteApiRequestWithRedirect.call(
+			context as never,
+			'POST',
+			'/functions/fn1/runs/start',
+			{ workflow_id: 'fn1' },
+			{ 'x-notte-api-key': 'test-key' },
+		);
+
+		expect(result).toEqual({ result: 'ok' });
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+
+		const [, fetchOptions] = mockFetch.mock.calls[0];
+		expect(fetchOptions.redirect).toBe('manual');
+		expect(fetchOptions.headers['x-notte-api-key']).toBe('test-key');
+		expect(fetchOptions.headers['Authorization']).toBe('Bearer test-api-key-123');
+	});
+
+	it('follows 307 redirect preserving headers', async () => {
+		const { context } = createMockExecuteFunctions();
+
+		// First call returns 307 redirect
+		mockFetch = jest.spyOn(global, 'fetch')
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 307,
+				headers: new Headers({ location: 'https://lambda.example.com/run' }),
+			} as Response)
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => ({ redirected: true }),
+				headers: new Headers(),
+			} as Response);
+
+		const result = await notteApiRequestWithRedirect.call(
+			context as never,
+			'POST',
+			'/functions/fn1/runs/start',
+			{ workflow_id: 'fn1' },
+		);
+
+		expect(result).toEqual({ redirected: true });
+		expect(mockFetch).toHaveBeenCalledTimes(2);
+
+		// Second call should be to the redirect location with same headers
+		const [redirectUrl, redirectOptions] = mockFetch.mock.calls[1];
+		expect(redirectUrl).toBe('https://lambda.example.com/run');
+		expect(redirectOptions.headers['Authorization']).toBe('Bearer test-api-key-123');
 	});
 });
 

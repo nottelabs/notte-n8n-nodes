@@ -1,3 +1,4 @@
+/* eslint-disable @n8n/community-nodes/no-restricted-globals */
 import { Notte } from '../nodes/Notte/Notte.node';
 import { createMockExecuteFunctions } from './helpers';
 
@@ -57,6 +58,10 @@ describe('Notte Node', () => {
 				session_id: 'ses_123',
 				status: 'closed',
 			});
+
+			// Verify correct URLs
+			expect(mockHttpRequest.mock.calls[0][0].url).toContain('/sessions/start');
+			expect(mockHttpRequest.mock.calls[3][0].url).toContain('/sessions/ses_123/stop');
 		});
 
 		it('prepends https:// to URL without protocol', async () => {
@@ -257,6 +262,14 @@ describe('Notte Node', () => {
 	});
 
 	describe('Function mode', () => {
+		let mockFetch: jest.SpyInstance;
+
+		afterEach(() => {
+			if (mockFetch) {
+				mockFetch.mockRestore();
+			}
+		});
+
 		it('starts function run and polls until closed', async () => {
 			const { context, mockHttpRequest } = createMockExecuteFunctions({
 				nodeParameters: {
@@ -269,9 +282,15 @@ describe('Notte Node', () => {
 				},
 			});
 
-			// Create run
-			mockHttpRequest.mockResolvedValueOnce({ function_run_id: 'run_789' });
-			// Poll status - terminal
+			// Mock fetch for the start call (uses notteApiRequestWithRedirect)
+			mockFetch = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => ({ function_run_id: 'run_789' }),
+				headers: new Headers(),
+			} as Response);
+
+			// Poll status - terminal (uses notteApiRequestWithPolling → httpRequest)
 			mockHttpRequest.mockResolvedValueOnce({
 				status: 'closed',
 				result: 'All done',
@@ -281,9 +300,14 @@ describe('Notte Node', () => {
 			const node = new Notte();
 			const result = await node.execute.call(context as never);
 
-			// Check run create request
-			const createBody = mockHttpRequest.mock.calls[0][0].body;
-			expect(createBody.variables).toEqual({ target_url: 'https://example.com' });
+			// Check fetch was called with correct URL and body
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			const [fetchUrl, fetchOptions] = mockFetch.mock.calls[0];
+			expect(fetchUrl).toContain('/functions/fn_abc123/runs/start');
+			const fetchBody = JSON.parse(fetchOptions.body);
+			expect(fetchBody.workflow_id).toBe('fn_abc123');
+			expect(fetchBody.variables).toEqual({ target_url: 'https://example.com' });
+			expect(fetchOptions.headers['x-notte-api-key']).toBe('test-api-key-123');
 
 			expect(result[0][0].json).toMatchObject({
 				success: true,
@@ -295,7 +319,7 @@ describe('Notte Node', () => {
 		});
 
 		it('returns immediately when waitForCompletion is false', async () => {
-			const { context, mockHttpRequest } = createMockExecuteFunctions({
+			const { context } = createMockExecuteFunctions({
 				nodeParameters: {
 					mode: 'function',
 					functionId: 'fn_abc123',
@@ -304,13 +328,19 @@ describe('Notte Node', () => {
 				},
 			});
 
-			mockHttpRequest.mockResolvedValueOnce({ function_run_id: 'run_789' });
+			// Mock fetch for the start call
+			mockFetch = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => ({ function_run_id: 'run_789' }),
+				headers: new Headers(),
+			} as Response);
 
 			const node = new Notte();
 			const result = await node.execute.call(context as never);
 
-			// Should only have called create, not poll
-			expect(mockHttpRequest).toHaveBeenCalledTimes(1);
+			// Should only have called fetch (start), not httpRequest (poll)
+			expect(mockFetch).toHaveBeenCalledTimes(1);
 			expect(result[0][0].json).toMatchObject({
 				success: true,
 				status: 'started',

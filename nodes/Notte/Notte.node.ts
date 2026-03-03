@@ -8,7 +8,11 @@ import {
 	NodeOperationError,
 } from 'n8n-workflow';
 
-import { notteApiRequest, notteApiRequestWithPolling } from './GenericFunctions';
+import {
+	notteApiRequest,
+	notteApiRequestWithPolling,
+	notteApiRequestWithRedirect,
+} from './GenericFunctions';
 import { agentFields } from './descriptions/AgentDescription';
 import { scrapeFields } from './descriptions/ScrapeDescription';
 import { functionFields } from './descriptions/FunctionDescription';
@@ -147,7 +151,7 @@ async function executeAgent(
 	const sessionResponse = (await notteApiRequest.call(
 		this,
 		'POST',
-		'/sessions',
+		'/sessions/start',
 		sessionBody,
 	)) as IDataObject;
 
@@ -222,7 +226,7 @@ async function executeAgent(
 
 		// 4. Stop the session
 		try {
-			await notteApiRequest.call(this, 'DELETE', `/sessions/${sessionId}`);
+			await notteApiRequest.call(this, 'DELETE', `/sessions/${sessionId}/stop`);
 		} catch {
 			// Ignore cleanup errors
 		}
@@ -252,7 +256,7 @@ async function executeAgent(
 			}
 		}
 		try {
-			await notteApiRequest.call(this, 'DELETE', `/sessions/${sessionId}`);
+			await notteApiRequest.call(this, 'DELETE', `/sessions/${sessionId}/stop`);
 		} catch {
 			// Ignore cleanup errors
 		}
@@ -352,16 +356,20 @@ async function executeFunction(
 	}
 
 	// Start the function run
-	const runBody: IDataObject = {};
+	const runBody: IDataObject = {
+		workflow_id: functionId,
+	};
 	if (Object.keys(variables).length > 0) {
 		runBody.variables = variables;
 	}
 
-	const runResponse = (await notteApiRequest.call(
+	const credentials = await this.getCredentials('notteApi');
+	const runResponse = (await notteApiRequestWithRedirect.call(
 		this,
 		'POST',
-		`/functions/${functionId}/runs/create`,
+		`/functions/${functionId}/runs/start`,
 		runBody,
+		{ 'x-notte-api-key': credentials.apiKey as string },
 	)) as IDataObject;
 
 	const runId = runResponse.function_run_id as string;
