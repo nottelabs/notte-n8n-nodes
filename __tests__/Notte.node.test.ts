@@ -12,14 +12,14 @@ jest.mock('n8n-workflow', () => {
 });
 
 describe('Notte Node', () => {
-	describe('description', () => {
-		it('has correct metadata', () => {
-			const node = new Notte();
-			expect(node.description.displayName).toBe('Notte');
-			expect(node.description.name).toBe('notte');
-			expect(node.description.usableAsTool).toBe(true);
+		describe('description', () => {
+			it('has correct metadata', () => {
+				const node = new Notte();
+				expect(node.description.displayName).toBe('Notte Agent Browser');
+				expect(node.description.name).toBe('notte');
+				expect(node.description.usableAsTool).toBe(true);
+			});
 		});
-	});
 
 	describe('Agent mode', () => {
 		it('creates session, starts agent, polls, and returns result', async () => {

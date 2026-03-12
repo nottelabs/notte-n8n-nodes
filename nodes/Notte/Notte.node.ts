@@ -19,16 +19,16 @@ import { functionFields } from './descriptions/FunctionDescription';
 
 export class Notte implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Notte',
+		displayName: 'Notte Agent Browser',
 		name: 'notte',
 		icon: 'file:../../icons/notte.svg',
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{ "Mode: " + $parameter["mode"] }}',
 		description:
-			'AI browser automation, web scraping, and workflow execution powered by Notte',
+			'AI-powered browser automation for autonomous web tasks, scraping, and workflows with Notte',
 		defaults: {
-			name: 'Notte',
+			name: 'Notte Agent Browser',
 		},
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],

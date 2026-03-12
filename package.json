@@ -1,7 +1,7 @@
 {
 	"name": "n8n-nodes-notte",
 	"version": "0.1.1",
-	"description": "n8n community node for Notte - AI browser automation, web scraping, and workflow execution",
+	"description": "n8n community node for Notte Agent Browser - AI-powered browser automation, scraping, and workflow execution",
 	"license": "MIT",
 	"homepage": "https://notte.cc",
 	"keywords": [
