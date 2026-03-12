@@ -287,26 +287,33 @@ async function executeScrape(
 		url = `https://${url}`;
 	}
 
-	let responseFormat: IDataObject;
-	try {
-		responseFormat = JSON.parse(responseFormatRaw) as IDataObject;
-	} catch {
-		throw new NodeOperationError(
-			this.getNode(),
-			'Response Format must be valid JSON (a JSON schema)',
-		);
+	let responseFormat: IDataObject | undefined;
+	if (responseFormatRaw.trim()) {
+		try {
+			responseFormat = JSON.parse(responseFormatRaw) as IDataObject;
+		} catch {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Response Format must be valid JSON (a JSON schema)',
+			);
+		}
 	}
 
 	const body: IDataObject = {
 		url,
-		instructions,
-		response_format: responseFormat,
 		headless: options.headless ?? true,
 		only_main_content: options.onlyMainContent ?? true,
 		scrape_links: options.scrapeLinks ?? true,
 		scrape_images: options.scrapeImages ?? false,
 		solve_captchas: options.solveCaptchas ?? false,
 	};
+
+	if (instructions.trim()) {
+		body.instructions = instructions;
+	}
+	if (responseFormat) {
+		body.response_format = responseFormat;
+	}
 
 	if (options.proxy) {
 		body.proxies = true;

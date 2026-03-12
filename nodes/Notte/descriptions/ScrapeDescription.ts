@@ -21,7 +21,6 @@ export const scrapeFields: INodeProperties[] = [
 		type: 'string',
 		typeOptions: { rows: 3 },
 		default: '',
-		required: true,
 		placeholder: 'e.g. Extract all product names and prices from this page',
 		description: 'What data to extract from the page',
 		displayOptions: {
@@ -35,7 +34,6 @@ export const scrapeFields: INodeProperties[] = [
 		name: 'scrapeResponseFormat',
 		type: 'json',
 		default: '',
-		required: true,
 		placeholder:
 			'{"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "price": {"type": "string"}}}}}}',
 		description: 'JSON schema defining the structure of the output data',

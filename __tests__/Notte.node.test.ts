@@ -259,6 +259,27 @@ describe('Notte Node', () => {
 			expect(body.proxies).toBe(true);
 			expect(body.scrape_images).toBe(true);
 		});
+
+		it('omits optional instructions and response format when empty', async () => {
+			const { context, mockHttpRequest } = createMockExecuteFunctions({
+				nodeParameters: {
+					mode: 'scrape',
+					scrapeUrl: 'https://example.com',
+					instructions: '',
+					scrapeResponseFormat: '',
+					scrapeOptions: {},
+				},
+			});
+
+			mockHttpRequest.mockResolvedValueOnce({ markdown: '', structured: {} });
+
+			const node = new Notte();
+			await node.execute.call(context as never);
+
+			const body = mockHttpRequest.mock.calls[0][0].body;
+			expect(body).not.toHaveProperty('instructions');
+			expect(body).not.toHaveProperty('response_format');
+		});
 	});
 
 	describe('Function mode', () => {
