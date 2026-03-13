@@ -1,6 +1,7 @@
 import type {
 	IDataObject,
 	IExecuteFunctions,
+	IN8nHttpFullResponse,
 	IHookFunctions,
 	ILoadOptionsFunctions,
 	IPollFunctions,
@@ -89,40 +90,83 @@ export async function notteApiRequestWithRedirect(
 	const credentials = await this.getCredentials('notteApi');
 	const baseUrl = (credentials.baseUrl as string) || 'https://api.notte.cc';
 
-	const headers: Record<string, string> = {
+	const headers: IDataObject = {
 		Accept: 'application/json',
 		'Content-Type': 'application/json',
 		Authorization: `Bearer ${credentials.apiKey as string}`,
 		...extraHeaders,
 	};
 
-	const jsonBody = body && Object.keys(body).length > 0 ? JSON.stringify(body) : undefined;
-
-	let response = await fetch(`${baseUrl}${endpoint}`, {
+	const options: IHttpRequestOptions = {
 		method,
+		url: `${baseUrl}${endpoint}`,
 		headers,
-		body: jsonBody,
-		redirect: 'manual',
-	});
+		json: true,
+		returnFullResponse: true,
+		disableFollowRedirect: true,
+		ignoreHttpStatusErrors: true,
+	};
 
-	if (response.status >= 300 && response.status < 400) {
-		const location = response.headers.get('location');
+	if (body && Object.keys(body).length > 0) {
+		options.body = body;
+	}
+
+	let response = (await this.helpers.httpRequest(options)) as IN8nHttpFullResponse;
+
+	if (response.statusCode >= 300 && response.statusCode < 400) {
+		const locationHeader = getResponseHeader(response.headers, 'location');
+		const location = locationHeader ? new URL(locationHeader, options.url).toString() : undefined;
+
 		if (location) {
-			response = await fetch(location, {
-				method,
-				headers,
-				body: jsonBody,
-			});
+			response = (await this.helpers.httpRequest({
+				...options,
+				url: location,
+				disableFollowRedirect: false,
+			})) as IN8nHttpFullResponse;
 		}
 	}
 
-	if (!response.ok) {
-		const text = await response.text();
+	if (response.statusCode < 200 || response.statusCode >= 300) {
+		const detail = stringifyResponseBody(response.body);
 		throw new NodeOperationError(
 			this.getNode(),
-			`Notte API error (${endpoint}): ${response.status} ${text}`,
+			`Notte API error (${endpoint}): ${response.statusCode} ${detail}`,
 		);
 	}
 
-	return response.json();
+	return response.body;
+}
+
+function getResponseHeader(headers: IDataObject, headerName: string): string | undefined {
+	const matchingKey = Object.keys(headers).find(
+		(key) => key.toLowerCase() === headerName.toLowerCase(),
+	);
+
+	const value = matchingKey ? headers[matchingKey] : undefined;
+
+	if (Array.isArray(value)) {
+		return value.find((item): item is string => typeof item === 'string');
+	}
+
+	return typeof value === 'string' ? value : undefined;
+}
+
+function stringifyResponseBody(body: IN8nHttpFullResponse['body']): string {
+	if (body === null || body === undefined) {
+		return 'Unknown error';
+	}
+
+	if (Buffer.isBuffer(body)) {
+		return body.toString('utf8');
+	}
+
+	if (typeof body === 'string' || typeof body === 'number' || typeof body === 'boolean') {
+		return String(body);
+	}
+
+	if (typeof body === 'object') {
+		return JSON.stringify(body);
+	}
+
+	return 'Unknown error';
 }
