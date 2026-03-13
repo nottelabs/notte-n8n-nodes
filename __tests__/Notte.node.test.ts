@@ -212,8 +212,7 @@ describe('Notte Node', () => {
 
 			expect(result[0][0].json).toMatchObject({
 				success: true,
-				markdown: '# Pricing',
-				structured: { plans: [] },
+				data: { plans: [] },
 			});
 		});
 
@@ -271,26 +270,22 @@ describe('Notte Node', () => {
 				},
 			});
 
-			mockHttpRequest.mockResolvedValueOnce({ markdown: '', structured: {} });
+			mockHttpRequest.mockResolvedValueOnce({ markdown: '# Example', structured: {} });
 
 			const node = new Notte();
-			await node.execute.call(context as never);
+			const result = await node.execute.call(context as never);
 
 			const body = mockHttpRequest.mock.calls[0][0].body;
 			expect(body).not.toHaveProperty('instructions');
 			expect(body).not.toHaveProperty('response_format');
+			expect(result[0][0].json).toMatchObject({
+				success: true,
+				data: '# Example',
+			});
 		});
 	});
 
 	describe('Function mode', () => {
-		let mockFetch: jest.SpyInstance;
-
-		afterEach(() => {
-			if (mockFetch) {
-				mockFetch.mockRestore();
-			}
-		});
-
 		it('starts function run and polls until closed', async () => {
 			const { context, mockHttpRequest } = createMockExecuteFunctions({
 				nodeParameters: {
@@ -303,32 +298,40 @@ describe('Notte Node', () => {
 				},
 			});
 
-			// Mock fetch for the start call (uses notteApiRequestWithRedirect)
-			mockFetch = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: async () => ({ function_run_id: 'run_789' }),
-				headers: new Headers(),
-			} as Response);
-
-			// Poll status - terminal (uses notteApiRequestWithPolling → httpRequest)
-			mockHttpRequest.mockResolvedValueOnce({
-				status: 'closed',
-				result: 'All done',
-				logs: ['step 1', 'step 2'],
-			});
+			mockHttpRequest
+				.mockResolvedValueOnce({
+					statusCode: 200,
+					headers: {},
+					body: { function_run_id: 'run_789' },
+				})
+				.mockResolvedValueOnce({
+					status: 'closed',
+					result: 'All done',
+					logs: ['step 1', 'step 2'],
+				});
 
 			const node = new Notte();
 			const result = await node.execute.call(context as never);
 
-			// Check fetch was called with correct URL and body
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			const [fetchUrl, fetchOptions] = mockFetch.mock.calls[0];
-			expect(fetchUrl).toContain('/functions/fn_abc123/runs/start');
-			const fetchBody = JSON.parse(fetchOptions.body);
-			expect(fetchBody.workflow_id).toBe('fn_abc123');
-			expect(fetchBody.variables).toEqual({ target_url: 'https://example.com' });
-			expect(fetchOptions.headers['x-notte-api-key']).toBe('test-api-key-123');
+			expect(mockHttpRequest).toHaveBeenCalledTimes(2);
+			expect(mockHttpRequest).toHaveBeenNthCalledWith(
+				1,
+				expect.objectContaining({
+					url: 'https://api.test.notte.cc/functions/fn_abc123/runs/start',
+					method: 'POST',
+					body: {
+						workflow_id: 'fn_abc123',
+						variables: { target_url: 'https://example.com' },
+					},
+					headers: expect.objectContaining({
+						'x-notte-api-key': 'test-api-key-123',
+						Authorization: 'Bearer test-api-key-123',
+					}),
+					returnFullResponse: true,
+					disableFollowRedirect: true,
+					ignoreHttpStatusErrors: true,
+				}),
+			);
 
 			expect(result[0][0].json).toMatchObject({
 				success: true,
@@ -340,7 +343,7 @@ describe('Notte Node', () => {
 		});
 
 		it('returns immediately when waitForCompletion is false', async () => {
-			const { context } = createMockExecuteFunctions({
+			const { context, mockHttpRequest } = createMockExecuteFunctions({
 				nodeParameters: {
 					mode: 'function',
 					functionId: 'fn_abc123',
@@ -349,19 +352,25 @@ describe('Notte Node', () => {
 				},
 			});
 
-			// Mock fetch for the start call
-			mockFetch = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: async () => ({ function_run_id: 'run_789' }),
-				headers: new Headers(),
-			} as Response);
+			mockHttpRequest.mockResolvedValueOnce({
+				statusCode: 200,
+				headers: {},
+				body: { function_run_id: 'run_789' },
+			});
 
 			const node = new Notte();
 			const result = await node.execute.call(context as never);
 
-			// Should only have called fetch (start), not httpRequest (poll)
-			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(mockHttpRequest).toHaveBeenCalledTimes(1);
+			expect(mockHttpRequest).toHaveBeenCalledWith(
+				expect.objectContaining({
+					url: 'https://api.test.notte.cc/functions/fn_abc123/runs/start',
+					method: 'POST',
+					returnFullResponse: true,
+					disableFollowRedirect: true,
+					ignoreHttpStatusErrors: true,
+				}),
+			);
 			expect(result[0][0].json).toMatchObject({
 				success: true,
 				status: 'started',
