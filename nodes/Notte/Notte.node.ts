@@ -326,11 +326,13 @@ async function executeScrape(
 		string,
 		unknown
 	>;
+	const shouldReturnStructured = Boolean(instructions.trim()) || responseFormat !== undefined;
 
 	return {
 		success: true,
-		markdown: response.markdown ?? null,
-		structured: response.structured ?? null,
+		data: shouldReturnStructured
+			? (response.structured ?? response.markdown ?? null)
+			: (response.markdown ?? null),
 		images: response.images ?? [],
 		url,
 	};
